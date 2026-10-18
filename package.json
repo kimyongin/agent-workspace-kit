@@ -1,0 +1,16 @@
+{
+  "name": "agent-workspace-kit",
+  "private": true,
+  "type": "module",
+  "workspaces": ["kits/marketplace"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "tsc -p kits/marketplace/tsconfig.json --noEmit",
+    "check:docs": "node scripts/check-docs.mjs",
+    "check:format": "deno fmt --check kits/marketplace/src kits/marketplace/tests examples scripts package.json kits/marketplace/package.json kits/marketplace/tsconfig.json",
+    "test": "npm run build && node --test kits/marketplace/tests/*.test.mjs",
+    "verify:package": "npm run build && node scripts/verify-package.mjs"
+  },
+  "devDependencies": { "typescript": "6.0.3" }
+}

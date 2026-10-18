@@ -1,6 +1,13 @@
 # agent-workspace-kit
 
-업무별 킷과 `agent-workspace-template`에서 사용하는 조립 규약을 관리합니다. 현재는 marketplace 킷의 조사·설계 단계이며 실행 라이브러리는 아직 구현하지 않았습니다.
+업무별 킷과 `agent-workspace-template`에서 사용하는 조립 규약을 관리합니다. 첫 marketplace 킷은 쿠팡·네이버 주문 읽기를 제공합니다. 실제 판매자 계정 호출과 나머지 마켓·쓰기 기능은 후속 검증·구현 범위입니다.
+
+## 킷 사용과 개발
+
+- [Marketplace 사용법과 검증](kits/marketplace/README.md)
+- [공통 킷 조립 규약](docs/kit-contract.md)
+
+Node 22와 Deno 2.9.6을 준비하고 `npm ci --ignore-scripts`, `npm run check`, `npm test`, `npm run verify:package` 순서로 실행합니다. registry 공개 없이 실제 패키지 산출물을 소비하는 예제로 검증합니다.
 
 ## Marketplace 문서
 
