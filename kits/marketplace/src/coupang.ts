@@ -1,18 +1,21 @@
 import { createCoupangOrderSource } from "./adapters/coupang.js";
-import type { CoupangClientOptions } from "./adapters/coupang.js";
-import { createOrderReader } from "./application/read-orders.js";
-import type { MarketplaceReader } from "./application/contracts.js";
+import type { CoupangReadOrdersOptions } from "./adapters/coupang.js";
+import { createReadOrdersUseCase } from "./application/read-orders.js";
+import type { ReadOrdersUseCase } from "./application/contracts.js";
 
 export type {
-  CoupangClientOptions,
   CoupangCredentials,
   CoupangOrderStatus,
+  CoupangReadOrdersOptions,
 } from "./adapters/coupang.js";
 
 /** Compose the public use case without starting requests or resolving credentials. */
-export function createCoupangClient(
-  configuration: CoupangClientOptions,
-): MarketplaceReader {
+export function createCoupangReadOrders(
+  configuration: CoupangReadOrdersOptions,
+): ReadOrdersUseCase {
   const options = { ...configuration };
-  return createOrderReader(createCoupangOrderSource(options), options.now);
+  return createReadOrdersUseCase(
+    createCoupangOrderSource(options),
+    options.now,
+  );
 }

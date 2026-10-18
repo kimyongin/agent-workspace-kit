@@ -7,6 +7,7 @@
 - [Marketplace 사용법과 검증](kits/marketplace/README.md)
 - [공통 킷 조립 규약](docs/kit-contract.md)
 - [SDK 헥사고날 설계와 개발 지침](docs/architecture.md)
+- [모든 킷의 공개 유스케이스와 mock 규약](docs/mock-contract.md)
 
 Node 22와 Deno 2.9.6을 준비하고 `npm ci --ignore-scripts`, `npm run check`, `npm test`, `npm run verify:package` 순서로 실행합니다. registry 공개 없이 실제 패키지 산출물을 소비하는 예제로 검증합니다.
 

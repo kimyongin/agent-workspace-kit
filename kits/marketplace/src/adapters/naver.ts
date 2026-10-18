@@ -27,7 +27,7 @@ export interface NaverCredentials {
   readonly type: "SELF" | "SELLER";
   readonly accountId?: string;
 }
-export interface NaverClientOptions extends ClientDependencies {
+export interface NaverReadOrdersOptions extends ClientDependencies {
   readonly connectionId: string;
   readonly credentials: () => Promise<NaverCredentials>;
 }
@@ -56,7 +56,7 @@ function continuationSequence(input: unknown): string {
   return value;
 }
 export function createNaverOrderSource(
-  input: NaverClientOptions,
+  input: NaverReadOrdersOptions,
 ): OrderSource {
   const options = { ...input };
   validateConnectionId(options.connectionId);

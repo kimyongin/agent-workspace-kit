@@ -27,7 +27,7 @@ export interface CoupangCredentials {
   readonly accessKey: string;
   readonly secretKey: string;
 }
-export interface CoupangClientOptions extends ClientDependencies {
+export interface CoupangReadOrdersOptions extends ClientDependencies {
   readonly connectionId: string;
   readonly vendorId: string;
   readonly orderStatus: CoupangOrderStatus;
@@ -93,7 +93,7 @@ function line(value: unknown): OrderLine {
   };
 }
 export function createCoupangOrderSource(
-  configuration: CoupangClientOptions,
+  configuration: CoupangReadOrdersOptions,
 ): OrderSource {
   const options = { ...configuration };
   validateConnectionId(options.connectionId);

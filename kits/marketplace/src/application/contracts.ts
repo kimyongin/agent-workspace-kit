@@ -7,8 +7,8 @@ export interface ReadOrdersQuery {
   readonly signal?: AbortSignal;
 }
 
-export interface MarketplaceReader {
+export interface ReadOrdersUseCase {
   readonly market: Market;
   /** No persistence: the host commits page data and cursor atomically. */
-  readOrders(query: ReadOrdersQuery): Promise<OrderPage>;
+  execute(query: ReadOrdersQuery): Promise<OrderPage>;
 }

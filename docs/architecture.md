@@ -16,6 +16,8 @@ flowchart LR
 
 앱은 공개 유스케이스를 직접 호출할 수 있다. HTTP·MCP 등의 전송 변환이 실제로 필요할 때 인바운드 어댑터를 추가한다. 단순 전달만 하는 인바운드 어댑터 계층을 일괄 생성하지 않는다.
 
+공개 유스케이스의 mock은 입력 포트를 대체한다. 실제/mock의 교체와 반환 모델 주입은 모든 킷에 적용하는 [mock 규약](mock-contract.md)이 정한다.
+
 ## 역할과 의존 규칙
 
 | 위치 | 역할 | 허용하는 내부 의존성 |
@@ -23,6 +25,7 @@ flowchart LR
 | `domain/` | 업무 모델·불변식·오류 | domain |
 | `application/` | 한 호출의 처리 흐름·유스케이스·아웃바운드 포트 | domain, application |
 | `adapters/` | 외부 인증·통신·전문 해석·제공자별 계약 | domain, application, adapters |
+| `testing/` | 앱이 사용하는 공개 입력 포트의 mock 구현 | domain, application, testing |
 | 공개 진입점 | 타입·유스케이스 노출 및 생성 함수에서 어댑터 조립 | 필요한 내부 구현 |
 
 domain과 application은 외부 패키지·어댑터·공개 조립 진입점을 import하지 않는다. 런타임 통신과 비밀값 해석은 어댑터가 맡는다. 시간처럼 실제로 바뀌는 의존성은 작은 포트로 받는다. 포트는 업무 의미를 표현하고 HTTP 요청·JSON 전문 같은 제공자 표현을 유스케이스에 노출하지 않는다. 내부 helper마다 포트를 만들거나 공통 실행 엔진을 추가하지 않는다.
@@ -35,7 +38,7 @@ domain과 application은 외부 패키지·어댑터·공개 조립 진입점을
 src/
 ├── domain/              주문 모델·공통 오류
 ├── application/
-│   ├── read-orders.ts   공개 readOrders 유스케이스 구현
+│   ├── read-orders.ts   공개 주문 조회 유스케이스 구현
 │   ├── contracts.ts     공개 유스케이스의 입력·인터페이스
 │   ├── ports.ts         OrderSource·Clock 아웃바운드 포트
 │   └── clock.ts         주입된 시각의 검증과 안전한 오류 처리
@@ -44,13 +47,15 @@ src/
 │   ├── naver.ts         네이버 변경·상세 조회·인증·변환
 │   ├── protocol.ts      HTTP·응답·커서 처리
 │   └── options.ts       전송·자격증명 조립에 사용하는 공통 설정 타입
-├── coupang.ts           createCoupangClient 조립 진입점
-├── naver.ts             createNaverClient 조립 진입점
+├── coupang.ts           createCoupangReadOrders 조립 진입점
+├── naver.ts             createNaverReadOrders 조립 진입점
+├── testing/             공개 반환 모델을 재현하는 mock 유스케이스
+├── testing.ts           createMockReadOrders 공개 진입점
 ├── types.ts             공개 타입 전용 진입점
 └── index.ts             공통 오류·타입 공개
 ```
 
-`createCoupangClient`와 `createNaverClient`는 내부 `OrderSource` 구현을 `createOrderReader`에 주입하고 `MarketplaceReader`를 반환한다. 앱은 기존처럼 `reader.readOrders(query)`를 호출한다. 별도 인바운드 어댑터는 없다.
+`createCoupangReadOrders`와 `createNaverReadOrders`는 내부 `OrderSource` 구현을 `createReadOrdersUseCase`에 주입하고 `ReadOrdersUseCase`를 반환한다. 앱은 `orders.execute(query)`를 호출한다. 별도 인바운드 어댑터는 없다. `createMockReadOrders`는 같은 입력 포트의 대체 구현을 반환하며 실제 유스케이스와 내부 `OrderSource`를 실행하지 않는다.
 
 유스케이스는 한 페이지를 읽고 공통 주문·항목 식별자의 중복을 검증한 뒤 관측 시각을 부여해 결과를 완성한다. `OrderSource`는 관측 시각을 제외한 정규화된 페이지를 반환한다. 시간 포트는 인증·관측 시각 모두에서 안전한 시간 검증을 거친다.
 
@@ -63,3 +68,5 @@ src/
 공개 유스케이스를 통해 인증·요청·응답 변환·오류·커서 동작을 검증한다. HTTP 응답을 fixture로 대체하고 실제 어댑터와 유스케이스를 함께 실행한다. 내부 helper 호출 순서를 테스트 계약으로 고정하지 않는다. 공통 업무 규칙이 늘어나면 domain/application에서 검증하고 마켓별 정책은 어댑터 계약으로 검증한다.
 
 `check:architecture`는 정적 import·re-export·문자열 동적 import의 계층 의존성을 검사한다. 구조 변경은 이 검사와 기존 회귀 테스트, Node·Deno 실제 패키지 소비 검증을 통과해야 한다. 이 검사는 전역 API 사용이나 모든 실행 시 부수효과를 증명하지 않으므로 공개 호출 동작과 코드 리뷰를 함께 확인한다. 마켓 계정 검증과 앱 통합·운영 검증은 별도 범위로 기록한다.
+
+`/testing` 진입점과 testing 구현은 어댑터·다른 조립 진입점·외부 패키지를 참조하지 않도록 검사한다. 실제 구현에서 mock을 가져오는 경로도 허용하지 않는다. 이 구조 검사와 네트워크 권한 없이 실행하는 패키지 소비 예제로 mock의 독립성을 확인한다.

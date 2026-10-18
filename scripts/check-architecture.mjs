@@ -15,23 +15,33 @@ async function collect(directory) {
 }
 await collect(source);
 const known = new Set(files);
-const entries = new Set(["index.ts", "types.ts", "coupang.ts", "naver.ts"]);
+const entries = new Set([
+  "index.ts",
+  "types.ts",
+  "coupang.ts",
+  "naver.ts",
+  "testing.ts",
+]);
 function layer(file) {
   const path = relative(source, file).split(sep).join("/");
   if (entries.has(path)) return "composition";
   const first = path.split("/")[0];
-  if (["domain", "application", "adapters"].includes(first)) return first;
+  if (["domain", "application", "adapters", "testing"].includes(first)) {
+    return first;
+  }
   throw new Error(`Unclassified SDK source: ${path}`);
 }
 const allowed = {
   domain: new Set(["domain"]),
   application: new Set(["domain", "application"]),
   adapters: new Set(["domain", "application", "adapters"]),
+  testing: new Set(["domain", "application", "testing"]),
   composition: new Set(["domain", "application", "adapters", "composition"]),
 };
 let edges = 0;
 for (const file of files) {
   const from = layer(file);
+  const isTestingEntry = file === resolve(source, "testing.ts");
   const name = relative(root, file);
   const ast = ts.createSourceFile(
     file,
@@ -45,7 +55,10 @@ for (const file of files) {
     }
     const value = specifier.text;
     if (!value.startsWith(".")) {
-      if (from === "domain" || from === "application") {
+      if (
+        from === "domain" || from === "application" || from === "testing" ||
+        isTestingEntry
+      ) {
         throw new Error(`Core imports external module: ${name} -> ${value}`);
       }
       return;
@@ -56,7 +69,14 @@ for (const file of files) {
         `Module must resolve inside SDK source: ${name} -> ${value}`,
       );
     }
-    if (!allowed[from].has(layer(target))) {
+    if (
+      !isTestingEntry && from !== "testing" &&
+      target === resolve(source, "testing.ts")
+    ) {
+      throw new Error(`Production imports testing entry: ${name} -> ${value}`);
+    }
+    const permitted = isTestingEntry ? allowed.testing : allowed[from];
+    if (!permitted.has(layer(target))) {
       throw new Error(`Outward dependency: ${name} -> ${value}`);
     }
     edges++;

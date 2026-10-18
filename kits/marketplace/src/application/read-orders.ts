@@ -1,16 +1,16 @@
 import { MarketplaceError } from "../domain/errors.js";
-import type { MarketplaceReader } from "./contracts.js";
+import type { ReadOrdersUseCase } from "./contracts.js";
 import { currentTime } from "./clock.js";
 import type { Clock, OrderSource } from "./ports.js";
 
 /** Read one complete page. Scheduling, persistence and scan retries belong to the app. */
-export function createOrderReader(
+export function createReadOrdersUseCase(
   source: OrderSource,
   now?: Clock,
-): MarketplaceReader {
+): ReadOrdersUseCase {
   return {
     market: source.market,
-    async readOrders(query) {
+    async execute(query) {
       const page = await source.readPage(query);
       const identities = new Set<string>();
       for (const order of page.items) {

@@ -1,6 +1,6 @@
 {
   "name": "@kimyongin/marketplace-kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Typed marketplace order readers with host-owned persistence and scheduling",
   "repository": {
@@ -18,7 +18,11 @@
       "types": "./dist/coupang.d.ts",
       "default": "./dist/coupang.js"
     },
-    "./naver": { "types": "./dist/naver.d.ts", "default": "./dist/naver.js" }
+    "./naver": { "types": "./dist/naver.d.ts", "default": "./dist/naver.js" },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    }
   },
   "dependencies": { "bcryptjs": "3.0.3", "lossless-json": "4.3.2" }
 }
