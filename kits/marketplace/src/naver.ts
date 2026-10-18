@@ -1,5 +1,6 @@
 import { hash } from "bcryptjs";
 import { MarketplaceError } from "./errors.js";
+import { currentTime } from "./protocol.js";
 import {
   array,
   cursorScope,
@@ -69,7 +70,7 @@ export function createNaverClient(
       "A credentials provider is required.",
     );
   }
-  const now = options.now ?? (() => new Date());
+  const now = () => currentTime(options);
   const tokens = new Map<string, { value: string; expiresAt: number }>();
   const pending = new Map<string, Promise<string>>();
   const scope = (operation: string, value: NaverCredentials): RequestScope => ({

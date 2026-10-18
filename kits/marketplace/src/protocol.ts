@@ -56,12 +56,27 @@ export function invalidResponse(): never {
 export function validateDependencies(deps: ClientDependencies): void {
   if (
     deps.timeoutMs !== undefined &&
-    (!Number.isFinite(deps.timeoutMs) || deps.timeoutMs <= 0 ||
+    (!Number.isInteger(deps.timeoutMs) || deps.timeoutMs < 1 ||
       deps.timeoutMs > 120_000)
   ) {
     throw new MarketplaceError(
       "configuration",
       "timeoutMs must be between 1 and 120000.",
+    );
+  }
+}
+
+export function currentTime(deps: ClientDependencies): Date {
+  try {
+    const value = deps.now?.() ?? new Date();
+    if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+      throw new Error();
+    }
+    return new Date(value.getTime());
+  } catch {
+    throw new MarketplaceError(
+      "configuration",
+      "The clock did not provide a valid time.",
     );
   }
 }
@@ -214,7 +229,7 @@ export async function requestJson(
       : Number.isFinite(dateDelay)
       ? Math.max(
         0,
-        Math.ceil((dateDelay - (deps.now?.() ?? new Date()).getTime()) / 1000),
+        Math.ceil((dateDelay - currentTime(deps).getTime()) / 1000),
       )
       : undefined;
     try {

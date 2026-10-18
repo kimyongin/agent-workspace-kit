@@ -104,3 +104,71 @@ test("an HTTP-date rate limit is actionable without exposing the provider body",
       !JSON.stringify(error).includes("canary"),
   );
 });
+
+test("fractional request deadlines are rejected as configuration errors", () => {
+  for (const timeoutMs of [0.5, 1.5]) {
+    assert.throws(
+      () =>
+        createCoupangClient({
+          connectionId: "bad-timeout",
+          vendorId: "A00000001",
+          orderStatus: "ACCEPT",
+          timeoutMs,
+          credentials: async () => ({
+            accessKey: "synthetic",
+            secretKey: "synthetic",
+          }),
+        }),
+      (error) =>
+        error instanceof MarketplaceError && error.code === "configuration",
+    );
+  }
+});
+
+test("a resolver throwing the public error class cannot leak its original message", async () => {
+  const reader = createCoupangClient({
+    connectionId: "safe-resolver",
+    vendorId: "A00000001",
+    orderStatus: "ACCEPT",
+    credentials: async () => {
+      throw new MarketplaceError("transport", "credential-secret-canary");
+    },
+  });
+  await assert.rejects(
+    reader.readOrders({
+      from: "2026-10-18T00:00+09:00",
+      to: "2026-10-18T00:01+09:00",
+    }),
+    (error) =>
+      error instanceof MarketplaceError && error.code === "configuration" &&
+      !String(error.stack).includes("canary"),
+  );
+});
+
+test("an invalid or failing injected clock produces a safe configuration error", async () => {
+  for (
+    const now of [() => new Date(NaN), () => {
+      throw new MarketplaceError("transport", "clock-secret-canary");
+    }]
+  ) {
+    const reader = createCoupangClient({
+      connectionId: "safe-clock",
+      vendorId: "A00000001",
+      orderStatus: "ACCEPT",
+      now,
+      credentials: async () => ({
+        accessKey: "synthetic",
+        secretKey: "synthetic",
+      }),
+    });
+    await assert.rejects(
+      reader.readOrders({
+        from: "2026-10-18T00:00+09:00",
+        to: "2026-10-18T00:01+09:00",
+      }),
+      (error) =>
+        error instanceof MarketplaceError && error.code === "configuration" &&
+        !String(error.stack).includes("canary"),
+    );
+  }
+});

@@ -1,4 +1,5 @@
 import { MarketplaceError } from "./errors.js";
+import { currentTime } from "./protocol.js";
 import {
   array,
   id,
@@ -149,7 +150,15 @@ export function createCoupangClient(
         await requestJson(
           url,
           async () => {
-            const credentials = await options.credentials();
+            let credentials: CoupangCredentials;
+            try {
+              credentials = await options.credentials();
+            } catch {
+              throw new MarketplaceError(
+                "configuration",
+                "Signing credentials could not be resolved.",
+              );
+            }
             if (
               !credentials || typeof credentials.accessKey !== "string" ||
               !/^[A-Za-z0-9_-]{1,256}$/.test(credentials.accessKey) ||
@@ -162,9 +171,8 @@ export function createCoupangClient(
                 "Valid signing credentials are required.",
               );
             }
-            const date =
-              (options.now?.() ?? new Date()).toISOString().replace(/[-:]/g, "")
-                .slice(2, 15) + "Z";
+            const date = currentTime(options).toISOString().replace(/[-:]/g, "")
+              .slice(2, 15) + "Z";
             const key = await crypto.subtle.importKey(
               "raw",
               new TextEncoder().encode(credentials.secretKey),
@@ -246,7 +254,7 @@ export function createCoupangClient(
       return {
         items,
         nextCursor: null,
-        observedAt: (options.now?.() ?? new Date()).toISOString(),
+        observedAt: currentTime(options).toISOString(),
         coverage: {
           kind: "statusWindow",
           from: query.from,
