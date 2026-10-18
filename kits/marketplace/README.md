@@ -5,10 +5,10 @@
 ## 공개 Interface
 
 ```ts
-import { createCoupangClient } from "@kimyongin/marketplace-kit/coupang";
+import { createCoupangReadOrders } from "@kimyongin/marketplace-kit/coupang";
 import type { OrderPage } from "@kimyongin/marketplace-kit/types";
 
-const reader = createCoupangClient({
+const orders = createCoupangReadOrders({
   connectionId: "my-coupang-store",
   vendorId: "A00000001",
   orderStatus: "ACCEPT",
@@ -18,7 +18,7 @@ const reader = createCoupangClient({
   },
 });
 
-const page: OrderPage = await reader.readOrders({
+const page: OrderPage = await orders.execute({
   from: "2026-10-18T00:00+09:00",
   to: "2026-10-18T01:00+09:00",
 });
@@ -28,9 +28,11 @@ await store.commit({ records: page.items, cursor: page.nextCursor });
 
 `accessKey`, `secretKey`, `requestGate`, `store`는 호스트가 제공하는 값이며 SDK가 전역으로 설치하는 객체가 아니다. `fetch`, `now`, `beforeRequest`, `timeoutMs`를 선택적으로 주입한다. 인증과 요청 구성은 SDK가 수행하고 권한·비밀 저장·분산 제한·영속 저장은 호스트가 담당한다. import와 factory 생성에는 외부 부수효과가 없다.
 
-네이버는 `createNaverClient({ connectionId, credentials })`를 사용한다. resolver는 `clientId`, bcrypt salt 형식의 `clientSecret`, `type: "SELF" | "SELLER"`를 반환한다. SELLER는 `accountId`가 필요하다. 현재 계정과 조회조건에 묶인 다음 커서를 원래 `from`·`to`와 함께 전달한다. 인증 오류 시 토큰 갱신 재시도는 한 번으로 제한한다. 실제 판매자·솔루션 권한은 별도로 확보해야 한다.
+네이버는 `createNaverReadOrders({ connectionId, credentials })`를 사용한다. resolver는 `clientId`, bcrypt salt 형식의 `clientSecret`, `type: "SELF" | "SELLER"`를 반환한다. SELLER는 `accountId`가 필요하다. 현재 계정과 조회조건에 묶인 다음 커서를 원래 `from`·`to`와 함께 전달한다. 인증 오류 시 토큰 갱신 재시도는 한 번으로 제한한다. 실제 판매자·솔루션 권한은 별도로 확보해야 한다.
 
 ## 조회 의미와 제약
+
+생성 함수는 마켓별 아웃바운드 어댑터를 주문 읽기 유스케이스에 연결한다. 앱은 `ReadOrdersUseCase` 입력 포트의 `execute()`를 직접 호출한다. 유스케이스는 한 페이지의 공통 결과를 완성하고, 마켓별 인증·조회 조건·커서·응답 변환은 어댑터가 담당한다. 내부 구조와 의존 규칙은 [SDK 헥사고날 설계](https://github.com/kimyongin/agent-workspace-kit/blob/main/docs/architecture.md)를 따른다. 실행 시점·저장·진행 상태·스캔 재시도 정책은 앱 책임이다.
 
 | 구현 | 지원 범위 |
 | --- | --- |
@@ -40,6 +42,78 @@ await store.commit({ records: page.items, cursor: page.nextCursor });
 쿠팡 분단위 API의 페이징 요청 계약은 확인되지 않아 `nextToken`이 있는 응답은 불완전 응답 오류로 반환한다. 임의로 다음 페이지를 요청하거나 완료로 표시하지 않는다. 쿠팡 반품완료 등은 별도 API가 필요하다. 네이버 상세가 요청 ID와 일치하지 않으면 빈 상세·삭제로 해석하지 않고 해당 페이지를 실패시킨다.
 
 `OrderSnapshot.ref`는 쿠팡의 배송단위와 네이버의 상품주문단위를 구분한다. 같은 orderId가 여러 snapshot에 나타날 수 있으므로 orderId 하나로 덮어쓰지 않는다. ID는 문자열이며 JSON 파싱부터 정밀도를 보존한다. 금액은 부동소수점 대신 통화와 정확한 10진 문자열이다. 원본 상태는 보존하고 알 수 없는 상태는 `unknown`으로 표시한다. 배송지·고객 연락처·원문 payload는 반환하지 않는다. 현재 결과만으로 출고나 환불을 결정해서는 안 된다.
+
+## 앱에서 mock 사용
+
+mock은 실제 구현과 같은 `ReadOrdersUseCase`를 반환한다. 앱이 받는 `OrderPage` 전체를 주입하며 내부 모델이나 마켓 원문으로 변환하지 않는다.
+
+```ts
+import { createMockReadOrders } from "@kimyongin/marketplace-kit/testing";
+import type { OrderPage, ReadOrdersUseCase } from "@kimyongin/marketplace-kit/types";
+
+const from = "2026-10-18T00:00+09:00";
+const to = "2026-10-18T01:00+09:00";
+const demoPage: OrderPage = {
+  items: [], // 앱이 준비한 합성 OrderSnapshot[]를 그대로 넣을 수 있다.
+  nextCursor: null,
+  observedAt: "2026-10-18T03:00:00Z",
+  coverage: { kind: "changedWindow", from, to },
+};
+const demo = createMockReadOrders({
+  market: "naver",
+  scenarios: [{ request: { from, to }, result: demoPage }],
+});
+
+// 앱의 조립 지점에서 실제 구현 또는 demo를 전달한다.
+const loadOrders = (orders: ReadOrdersUseCase) => orders.execute({ from, to });
+const page = await loadOrders(demo);
+```
+
+`request`의 `from`·`to`·선택적 `cursor`를 문자열 그대로 매칭하고 `signal`은 매칭에서 제외한다. 다음 페이지는 해당 cursor의 시나리오로 설정한다. 반복·병렬 호출은 시나리오를 소비하지 않는다. 미등록 요청·중복 시나리오는 `configuration` 오류이며 빈 결과를 원하면 `items: []` 결과를 명시한다. 선택한 market과 주문 ref·종류·조회 의미는 일치해야 하며 한 페이지는 한 연결의 주문을 담는다. 실제 결과와 같은 공통 검증기로 중첩 필드·식별자 중복·수량·정확한 금액 문자열·유효한 시각·커서·요청과 coverage 일치를 확인한다. 제공자 제약 전체를 에뮬레이션하지 않는다.
+
+실패 시나리오는 `result` 대신 `error: { code: "rateLimited", status: 429, retryAfterSeconds: 10 }`처럼 설정한다. 매번 새로운 `MarketplaceError`를 반환하며 외부 원문 메시지·cause를 붙이지 않는다. 생성 시 fixture와 호출별 반환값을 복사하고, `observedAt`·커서·정밀 금액도 그대로 유지한다. 사전 취소된 호출은 `cancelled`다. 네트워크·자격증명·DB·환경변수·타이머를 사용하지 않는다.
+
+mock은 공개 입력 포트를 대체하며 실제 유스케이스·마켓 인증·정규화를 실행하지 않는다. 공개 모델 검증은 domain의 공통 검증기를 직접 재사용한다. 실제 어댑터 테스트에는 기존 `fetch` 주입으로 제공자 원문 fixture를 전달한다. 공통 지침은 [공개 유스케이스와 mock 규약](https://github.com/kimyongin/agent-workspace-kit/blob/main/docs/mock-contract.md), 실행 예제는 [mock 소비 예제](https://github.com/kimyongin/agent-workspace-kit/blob/main/examples/mock-orders.mjs)와 [실제/mock 교체 예제](https://github.com/kimyongin/agent-workspace-kit/blob/main/examples/read-orders.mjs)를 참고한다.
+
+## Fixture 빌더
+
+필요한 값만 지정해 공개 `OrderLine`·`OrderSnapshot`·`OrderPage`를 만든다. 결과를 변환하지 않고 mock의 `result`에 그대로 넣는다.
+
+```ts
+import { createOrderFixtures, createMockReadOrders } from "@kimyongin/marketplace-kit/testing";
+
+const fixtures = createOrderFixtures({ market: "naver", connectionId: "demo-store", from, to });
+const page = fixtures.page({
+  items: [fixtures.order({
+    lines: [fixtures.line({ title: "테스트 상품", quantity: 2 })],
+  })],
+});
+const orders = createMockReadOrders({
+  market: "naver",
+  scenarios: [{ request: { from, to }, result: page }],
+});
+```
+
+`line()`의 기본 수량은 1, 상품명은 합성 문자열, 단가는 KRW `"1000"`이며 결제금액은 추정하지 않고 생략한다. `order()`는 기본 항목 하나와 마켓에 맞는 ref 종류·초기 상태를 제공한다. `page()`는 기본 주문 하나, 다음 커서 null을 제공한다. 빈 페이지는 `page({ items: [] })`로 만든다. ref와 coverage는 부분 override가 가능하고 그 밖의 중첩 모델은 완전한 공개 타입을 전달한다.
+
+주문 시각은 `from`, 관측 시각은 `observedAt` 옵션 또는 `to`다. 현재 시각·난수를 사용하지 않는다. 같은 설정과 같은 빌더 호출 순서는 같은 데이터를 만든다. 자동 ID는 해당 인스턴스에 먼저 제공된 ID를 피해 생성한다. 명시 ID의 중복은 주문/페이지를 구성할 때 오류로 알리며 서로 다른 페이지에서 같은 주문을 재현하는 것은 가능하다. 입력과 반환 모델은 서로 복사되어 영향을 주지 않는다. 금액은 정확한 10진 문자열을 직접 지정하고 단가×수량으로 자동 정산하지 않는다.
+
+빌더와 직접 JSON 주입은 같은 공통 모델 검증기를 사용한다. 잘못된 fixture는 `MockFixtureError`(`MarketplaceError`의 하위 타입, code는 `configuration`)로 실패하고 `path`가 문제 위치를 가리킨다. 예를 들어 `line.quantity`, `page.items[1].ref.id`, `scenarios[1].result.items[0].lines[2].unitPrice.amount`다. 메시지에는 잘못된 값이나 원본 exception을 넣지 않는다. 실제 조회에서 잘못된 정규화 결과는 안전한 `invalidResponse`다.
+
+## 0.2.0 전환
+
+공개 기능을 유스케이스로 명확히 하고 mock과 동일 계약으로 제공하기 위해 0.1.0의 공개 이름을 변경했다. 앱의 조립 코드와 타입·호출을 함께 전환한다. 주문 결과·조회 의미·오류·실제 마켓 커서 형식은 유지하며 이전 이름의 호환 alias는 제공하지 않는다.
+
+| 0.1.0 | 0.2.0 |
+| --- | --- |
+| `MarketplaceReader` | `ReadOrdersUseCase` |
+| `createCoupangClient` / `CoupangClientOptions` | `createCoupangReadOrders` / `CoupangReadOrdersOptions` |
+| `createNaverClient` / `NaverClientOptions` | `createNaverReadOrders` / `NaverReadOrdersOptions` |
+| `reader.readOrders(query)` | `orders.execute(query)` |
+
+`/testing`의 `createMockReadOrders`는 신규 진입점이며 내부 포트는 계속 비공개다.
+
+0.2.0의 mock/빌더는 중첩 공개 모델을 실행 시에도 검증한다. 이전의 느슨한 fixture에서 누락·잘못된 수량/금액/시간·중복 ID·연결/coverage 불일치가 있으면 `MockFixtureError.path`를 참고해 수정한다. 유효한 공개 결과와 실제 마켓 커서 형식은 바뀌지 않는다.
 
 ## 패키지 소비와 검증
 

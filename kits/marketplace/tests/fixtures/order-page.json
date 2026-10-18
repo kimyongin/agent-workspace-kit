@@ -1,0 +1,29 @@
+{
+  "items": [{
+    "ref": {
+      "market": "naver",
+      "connectionId": "demo-store",
+      "kind": "productOrder",
+      "id": "90071992547409931"
+    },
+    "orderId": "90071992547409933",
+    "placedAt": "2026-10-18T00:30:00+09:00",
+    "rawStatus": "PAYED",
+    "fulfillment": "preparing",
+    "lines": [{
+      "id": "90071992547409931",
+      "productId": "synthetic-product",
+      "title": "Synthetic demo item",
+      "quantity": 2,
+      "unitPrice": { "currency": "KRW", "amount": "9007199254740993.125" },
+      "paidAmount": { "currency": "KRW", "amount": "18014398509481986.25" }
+    }]
+  }],
+  "nextCursor": null,
+  "observedAt": "2026-10-18T03:00:00.123Z",
+  "coverage": {
+    "kind": "changedWindow",
+    "from": "2026-10-18T00:00+09:00",
+    "to": "2026-10-18T01:00+09:00"
+  }
+}

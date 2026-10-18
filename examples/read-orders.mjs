@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { createCoupangClient } from "@kimyongin/marketplace-kit/coupang";
-import { createNaverClient } from "@kimyongin/marketplace-kit/naver";
+import { createCoupangReadOrders } from "@kimyongin/marketplace-kit/coupang";
+import { createNaverReadOrders } from "@kimyongin/marketplace-kit/naver";
+import { createMockReadOrders } from "@kimyongin/marketplace-kit/testing";
 
 // The verifier copies canonical synthetic fixtures alongside this standalone consumer.
 const fixture = async (name) =>
@@ -40,8 +41,8 @@ const transport = async (input) => {
   });
 };
 const now = () => new Date("2026-10-18T03:00:00Z");
-const readers = [
-  createCoupangClient({
+const useCases = [
+  createCoupangReadOrders({
     connectionId: "example-coupang",
     vendorId: "A00000001",
     orderStatus: "ACCEPT",
@@ -52,7 +53,7 @@ const readers = [
     fetch: transport,
     now,
   }),
-  createNaverClient({
+  createNaverReadOrders({
     connectionId: "example-naver",
     credentials: async () => ({
       clientId: "aaaabbbb",
@@ -64,12 +65,20 @@ const readers = [
   }),
 ];
 
-for (const reader of readers) {
+const loadOrders = (orders, request) => orders.execute(request);
+for (const orders of useCases) {
   let committed = { items: [], cursor: null, observedAt: null };
-  const page = await reader.readOrders({
+  const request = {
     from: "2026-10-18T00:00+09:00",
     to: "2026-10-18T01:00+09:00",
+  };
+  const page = await loadOrders(orders, request);
+  const mock = createMockReadOrders({
+    market: orders.market,
+    scenarios: [{ request, result: page }],
   });
+  // Swap the implementation at app composition; keep the app's consumer identical.
+  assert.deepEqual(await loadOrders(mock, request), page);
   // A production host replaces this whole-state assignment with one DB transaction.
   // No next page is requested until both records and cursor have been committed.
   const commit = async (next) => {
@@ -82,10 +91,10 @@ for (const reader of readers) {
   });
   assert.ok(committed.items.length > 0);
   assert.equal(committed.cursor, null);
-  assert.equal(committed.items[0].ref.connectionId, `example-${reader.market}`);
+  assert.equal(committed.items[0].ref.connectionId, `example-${orders.market}`);
   assert.equal(typeof committed.items[0].orderId, "string");
   console.log(
-    `${reader.market}: packed reader, signing/auth and atomic host checkpoint example passed`,
+    `${orders.market}: packed use case, real/mock swap and atomic host checkpoint example passed`,
   );
 }
 assert.equal(calls, 4);

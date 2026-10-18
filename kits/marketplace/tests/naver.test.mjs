@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createNaverClient } from "../dist/naver.js";
+import { createNaverReadOrders } from "../dist/naver.js";
 const window = {
   from: "2026-10-17T00:00:00+09:00",
   to: "2026-10-18T00:00:00+09:00",
@@ -17,7 +17,7 @@ const json = (value) =>
 const empty = { data: { count: 0, lastChangeStatuses: [] } };
 test("authenticates with the official bcrypt vector and reads an empty changed window", async () => {
   const calls = [];
-  const reader = createNaverClient({
+  const reader = createNaverReadOrders({
     connectionId: "shop",
     credentials: async () => credentials,
     now: () => new Date(1643961623299),
@@ -31,7 +31,7 @@ test("authenticates with the official bcrypt vector and reads an empty changed w
     },
   });
   assert.equal(calls.length, 0);
-  const page = await reader.readOrders(window);
+  const page = await reader.execute(window);
   const form = new URLSearchParams(calls[0][1].body);
   assert.equal(
     form.get("client_secret_sign"),
@@ -59,7 +59,7 @@ const details = await (await import("node:fs/promises")).readFile(
 );
 function harness(responses, extra = {}) {
   const calls = [];
-  const reader = createNaverClient({
+  const reader = createNaverReadOrders({
     connectionId: "shop",
     credentials: async () => credentials,
     now: () => new Date("2026-10-18T00:00:00Z"),
@@ -78,7 +78,7 @@ function harness(responses, extra = {}) {
 const auth = { access_token: "token", expires_in: 10800, token_type: "Bearer" };
 test("hydrates only requested product orders and preserves identifiers and exact amounts without private fields", async () => {
   const { reader, calls } = harness([auth, changes, details]);
-  const page = await reader.readOrders(window);
+  const page = await reader.execute(window);
   assert.equal(calls[2][1].method, "POST");
   assert.deepEqual(JSON.parse(calls[2][1].body), {
     productOrderIds: ["90071992547409931234"],
@@ -112,15 +112,15 @@ test("continues at the exact same-timestamp sequence and binds cursors to connec
   };
   const feed = { data: { ...changes.data, more } };
   const { reader, calls } = harness([auth, feed, details, empty]);
-  const first = await reader.readOrders(window);
+  const first = await reader.execute(window);
   assert.ok(first.nextCursor);
-  await reader.readOrders({ ...window, cursor: first.nextCursor });
+  await reader.execute({ ...window, cursor: first.nextCursor });
   const params = new URL(calls[3][0]).searchParams;
   assert.equal(params.get("lastChangedFrom"), more.moreFrom);
   assert.equal(params.get("moreSequence"), more.moreSequence);
   assert.equal(params.get("lastChangedTo"), window.to);
   await assert.rejects(
-    reader.readOrders({
+    reader.execute({
       ...window,
       to: "2026-10-17T22:00:00+09:00",
       cursor: first.nextCursor,
@@ -129,7 +129,7 @@ test("continues at the exact same-timestamp sequence and binds cursors to connec
   );
   const other = harness([], { connectionId: "other" });
   await assert.rejects(
-    other.reader.readOrders({ ...window, cursor: first.nextCursor }),
+    other.reader.execute({ ...window, cursor: first.nextCursor }),
     { code: "invalidCursor" },
   );
   assert.equal(other.calls.length, 0);
@@ -141,7 +141,7 @@ test("continues at the exact same-timestamp sequence and binds cursors to connec
     }),
   });
   await assert.rejects(
-    seller.reader.readOrders({ ...window, cursor: first.nextCursor }),
+    seller.reader.execute({ ...window, cursor: first.nextCursor }),
     { code: "invalidCursor" },
   );
 });
@@ -159,7 +159,7 @@ test("fails the entire page when detail identifiers are missing, duplicated or u
     }]]
   ) {
     const { reader } = harness([auth, changes, { data }]);
-    await assert.rejects(reader.readOrders(window), {
+    await assert.rejects(reader.execute(window), {
       code: "invalidResponse",
     });
   }
@@ -168,7 +168,7 @@ test("keeps future product statuses as unknown without exposing the source recor
   const detail = JSON.parse(details);
   detail.data[0].productOrder.productOrderStatus = "FUTURE_STATUS";
   const { reader } = harness([auth, changes, detail]);
-  const page = await reader.readOrders(window);
+  const page = await reader.execute(window);
   assert.equal(page.items[0].rawStatus, "FUTURE_STATUS");
   assert.equal(page.items[0].fulfillment, "unknown");
 });
@@ -180,15 +180,15 @@ test("validates window and malformed cursors before any network request", async 
       return credentials;
     },
   });
-  await assert.rejects(reader.readOrders({ ...window, from: window.to }), {
+  await assert.rejects(reader.execute({ ...window, from: window.to }), {
     code: "invalidInput",
   });
   await assert.rejects(
-    reader.readOrders({ ...window, to: "2026-10-19T00:00:00+09:00" }),
+    reader.execute({ ...window, to: "2026-10-19T00:00:00+09:00" }),
     { code: "invalidInput" },
   );
   assert.equal(resolves, 0);
-  await assert.rejects(reader.readOrders({ ...window, cursor: "garbage" }), {
+  await assert.rejects(reader.execute({ ...window, cursor: "garbage" }), {
     code: "invalidCursor",
   });
   assert.equal(calls.length, 0);
@@ -196,7 +196,7 @@ test("validates window and malformed cursors before any network request", async 
 test("rotated credentials acquire their own token and concurrent reads share local issuance", async () => {
   let current = credentials;
   let issues = 0;
-  const reader = createNaverClient({
+  const reader = createNaverReadOrders({
     connectionId: "shop",
     credentials: async () => current,
     fetch: async (url) => {
@@ -207,13 +207,13 @@ test("rotated credentials acquire their own token and concurrent reads share loc
       return json(empty);
     },
   });
-  await Promise.all([reader.readOrders(window), reader.readOrders(window)]);
+  await Promise.all([reader.execute(window), reader.execute(window)]);
   assert.equal(issues, 1);
   current = { ...credentials, clientId: "rotated" };
-  await reader.readOrders(window);
+  await reader.execute(window);
   assert.equal(issues, 2);
   current = { ...current, type: "SELLER", accountId: "other" };
-  await reader.readOrders(window);
+  await reader.execute(window);
   assert.equal(issues, 3);
 });
 test("refreshes once on API 401 and masks provider error bodies and credential callback failures", async () => {
@@ -223,7 +223,7 @@ test("refreshes once on API 401 and masks provider error bodies and credential c
     auth,
     empty,
   ]);
-  await reader.readOrders(window);
+  await reader.execute(window);
   assert.equal(calls.length, 4);
   const broken = harness([
     auth,
@@ -232,7 +232,7 @@ test("refreshes once on API 401 and masks provider error bodies and credential c
     new Response("SECRET token", { status: 401 }),
   ]);
   await assert.rejects(
-    broken.reader.readOrders(window),
+    broken.reader.execute(window),
     (error) =>
       error.code === "authentication" && !String(error).includes("SECRET"),
   );
@@ -243,7 +243,7 @@ test("refreshes once on API 401 and masks provider error bodies and credential c
     },
   });
   await assert.rejects(
-    callback.reader.readOrders(window),
+    callback.reader.execute(window),
     (error) =>
       error.code === "configuration" && !String(error).includes("SECRET"),
   );
@@ -259,7 +259,7 @@ test("waits for coordination before reading authentication clock or signing", as
       events.push(s.operation);
     },
   });
-  await reader.readOrders(window);
+  await reader.execute(window);
   assert.deepEqual(events.slice(0, 3), [
     "readOrderChanges",
     "authenticate",
@@ -280,7 +280,7 @@ test("coordinates shared app and seller operation quotas across separate connect
         scopes.push(scope);
       },
     });
-    await reader.readOrders(window);
+    await reader.execute(window);
   }
   const first = scopes.find((s) =>
     s.connectionId === "one" && s.operation === "readOrderChanges"
@@ -310,7 +310,7 @@ test("coordinates shared app and seller operation quotas across separate connect
       otherAppScopes.push(scope);
     },
   });
-  await otherApp.reader.readOrders(window);
+  await otherApp.reader.execute(window);
   const otherAppRead = otherAppScopes.find((s) =>
     s.operation === "readOrderChanges"
   );
@@ -329,7 +329,7 @@ test("cancelling the first token waiter leaves a concurrent read able to finish"
   });
   let issues = 0;
   const controller = new AbortController();
-  const reader = createNaverClient({
+  const reader = createNaverReadOrders({
     connectionId: "shared",
     credentials: async () => credentials,
     fetch: async (url, init) => {
@@ -346,9 +346,9 @@ test("cancelling the first token waiter leaves a concurrent read able to finish"
       });
     },
   });
-  const first = reader.readOrders({ ...window, signal: controller.signal });
+  const first = reader.execute({ ...window, signal: controller.signal });
   const firstRejected = assert.rejects(first, { code: "cancelled" });
-  const second = reader.readOrders(window);
+  const second = reader.execute(window);
   await started;
   controller.abort();
   finishToken();
@@ -370,7 +370,7 @@ test("rejects unsafe credential identities and bcrypt inputs before signing or r
     ]
   ) {
     const { reader, calls } = harness([], { credentials: async () => invalid });
-    await assert.rejects(reader.readOrders(window), { code: "configuration" });
+    await assert.rejects(reader.execute(window), { code: "configuration" });
     assert.equal(calls.length, 0);
   }
 });
@@ -387,14 +387,14 @@ test("rejects unbounded, empty-page, malformed and non-progressing provider posi
       { data: { ...changes.data, more } },
       details,
     ]);
-    await assert.rejects(reader.readOrders(window), {
+    await assert.rejects(reader.execute(window), {
       code: "invalidResponse",
     });
   }
   const emptyMore = harness([auth, {
     data: { ...empty.data, more: { moreFrom: window.from, moreSequence: "1" } },
   }]);
-  await assert.rejects(emptyMore.reader.readOrders(window), {
+  await assert.rejects(emptyMore.reader.execute(window), {
     code: "invalidResponse",
   });
   const firstMore = {
@@ -409,9 +409,9 @@ test("rejects unbounded, empty-page, malformed and non-progressing provider posi
     { data: { ...changes.data, more: equivalent } },
     details,
   ]);
-  const first = await loop.reader.readOrders(window);
+  const first = await loop.reader.execute(window);
   await assert.rejects(
-    loop.reader.readOrders({ ...window, cursor: first.nextCursor }),
+    loop.reader.execute({ ...window, cursor: first.nextCursor }),
     { code: "invalidResponse" },
   );
 });
@@ -419,5 +419,5 @@ test("rejects malformed order timestamps rather than producing invalid snapshots
   const detail = JSON.parse(details);
   detail.data[0].order.orderDate = "2026-10-17T24:00:00+09:00";
   const { reader } = harness([auth, changes, detail]);
-  await assert.rejects(reader.readOrders(window), { code: "invalidResponse" });
+  await assert.rejects(reader.execute(window), { code: "invalidResponse" });
 });

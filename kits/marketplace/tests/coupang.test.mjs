@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createHmac } from "node:crypto";
-import { createCoupangClient } from "../dist/coupang.js";
+import { createCoupangReadOrders } from "../dist/coupang.js";
 const fixture = await readFile(
   new URL("./fixtures/coupang-orders.json", import.meta.url),
   "utf8",
@@ -22,7 +22,7 @@ const options = (extra = {}) => ({
   ...extra,
 });
 test("reads v5 shipment identity, quantities and exact money without buyer fields", async () => {
-  const page = await createCoupangClient(options()).readOrders(query);
+  const page = await createCoupangReadOrders(options()).execute(query);
   assert.deepEqual(page, {
     items: [{
       ref: {
@@ -60,7 +60,7 @@ test("reads v5 shipment identity, quantities and exact money without buyer field
 
 test("rejects unsupported cursors and non-minute same-KST-day windows before callbacks", async () => {
   let callbacks = 0;
-  const client = createCoupangClient(options({
+  const client = createCoupangReadOrders(options({
     credentials: async () => {
       callbacks++;
       return credentials();
@@ -88,7 +88,7 @@ test("rejects unsupported cursors and non-minute same-KST-day windows before cal
       },
     ]
   ) {
-    await assert.rejects(client.readOrders(invalid), {
+    await assert.rejects(client.execute(invalid), {
       code: invalid.cursor !== undefined ? "invalidCursor" : "invalidInput",
     });
   }
@@ -97,7 +97,7 @@ test("rejects unsupported cursors and non-minute same-KST-day windows before cal
 test("signs the exact encoded fixed-host request after coordination with fresh UTC time", async () => {
   let gated = false;
   let captured;
-  const client = createCoupangClient(options({
+  const client = createCoupangReadOrders(options({
     beforeRequest: async (scope) => {
       assert.equal(scope.market, "coupang");
       gated = true;
@@ -114,7 +114,7 @@ test("signs the exact encoded fixed-host request after coordination with fresh U
     },
   }));
   assert.equal(gated, false);
-  await client.readOrders(query);
+  await client.execute(query);
   const url = new URL(captured.url);
   assert.equal(url.origin, "https://api-gateway.coupang.com");
   assert.equal(
@@ -143,9 +143,9 @@ test("unknown provider statuses stay unknown and null money is omitted", async (
     body.data[0].status = status;
     body.data[0].orderItems[0].salesPrice = null;
     body.data[0].orderItems[0].orderPrice = null;
-    const page = await createCoupangClient(
+    const page = await createCoupangReadOrders(
       options({ fetch: async () => new Response(JSON.stringify(body)) }),
-    ).readOrders(query);
+    ).execute(query);
     assert.equal(page.items[0].fulfillment, "unknown");
     assert.equal("unitPrice" in page.items[0].lines[0], false);
     assert.equal("paidAmount" in page.items[0].lines[0], false);
@@ -154,11 +154,11 @@ test("unknown provider statuses stay unknown and null money is omitted", async (
 test("binds connection configuration and distinguishes dispatch instruction from shipment", async () => {
   const body = fixture.replace('"status": "ACCEPT"', '"status": "DEPARTURE"');
   const config = options({ fetch: async () => new Response(body) });
-  const client = createCoupangClient(config);
+  const client = createCoupangReadOrders(config);
   config.connectionId = "changed";
   config.vendorId = "changed";
   config.orderStatus = "DELIVERING";
-  const page = await client.readOrders(query);
+  const page = await client.execute(query);
   assert.equal(page.items[0].ref.connectionId, "connection-1");
   assert.equal(page.coverage.status, "ACCEPT");
   assert.equal(page.items[0].fulfillment, "dispatchRequested");
@@ -172,23 +172,23 @@ test("rejects malformed credentials before network and never exposes resolver er
   ) {
     let fetched = false;
     await assert.rejects(
-      createCoupangClient(options({
+      createCoupangReadOrders(options({
         credentials: async () => bad,
         fetch: async () => {
           fetched = true;
           return new Response(fixture);
         },
-      })).readOrders(query),
+      })).execute(query),
       { code: "configuration" },
     );
     assert.equal(fetched, false);
   }
   await assert.rejects(
-    createCoupangClient(options({
+    createCoupangReadOrders(options({
       credentials: async () => {
         throw new Error("synthetic-private-secret");
       },
-    })).readOrders(query),
+    })).execute(query),
     (error) =>
       error.code === "configuration" &&
       !JSON.stringify(error).includes("synthetic-private-secret") &&
@@ -237,9 +237,9 @@ test("fails closed on malformed response, incomplete minute results and unsafe q
     ]
   ) {
     await assert.rejects(
-      createCoupangClient(
+      createCoupangReadOrders(
         options({ fetch: async () => new Response(JSON.stringify(body)) }),
-      ).readOrders(query),
+      ).execute(query),
       { code: "invalidResponse" },
     );
   }
@@ -254,13 +254,13 @@ test("HTTP failures expose only safe categories and retry delay, never provider 
     ]
   ) {
     await assert.rejects(
-      createCoupangClient(options({
+      createCoupangReadOrders(options({
         fetch: async () =>
           new Response("private-address synthetic-secret", {
             status,
             headers: { "Retry-After": "12" },
           }),
-      })).readOrders(query),
+      })).execute(query),
       (error) => {
         assert.equal(error.code, code);
         assert.equal(error.status, status);
@@ -278,10 +278,10 @@ test("HTTP failures expose only safe categories and retry delay, never provider 
     );
   }
   await assert.rejects(
-    createCoupangClient(options({
+    createCoupangReadOrders(options({
       fetch: async () =>
         new Response('{"code":500,"message":"private-address"}'),
-    })).readOrders(query),
+    })).execute(query),
     { code: "providerRejected" },
   );
 });
@@ -289,7 +289,7 @@ test("cancellation prevents callbacks, and transport failures have safe messages
   let calls = 0;
   const controller = new AbortController();
   controller.abort();
-  const client = createCoupangClient(options({
+  const client = createCoupangReadOrders(options({
     credentials: async () => {
       calls++;
       return credentials();
@@ -304,22 +304,22 @@ test("cancellation prevents callbacks, and transport failures have safe messages
   }));
   assert.equal(calls, 0);
   await assert.rejects(
-    client.readOrders({ ...query, signal: controller.signal }),
+    client.execute({ ...query, signal: controller.signal }),
     { code: "cancelled" },
   );
   assert.equal(calls, 0);
   await assert.rejects(
-    client.readOrders(query),
+    client.execute(query),
     (error) =>
       error.code === "transport" && !error.stack.includes("synthetic-secret"),
   );
 });
 test("empty complete results return a bounded status window without invented cursor", async () => {
-  const page = await createCoupangClient(
+  const page = await createCoupangReadOrders(
     options({
       fetch: async () => new Response('{"code":200,"data":[],"nextToken":""}'),
     }),
-  ).readOrders(query);
+  ).execute(query);
   assert.deepEqual(page.items, []);
   assert.equal(page.nextCursor, null);
   assert.equal(page.coverage.kind, "statusWindow");
@@ -339,21 +339,35 @@ test("rejects duplicate shipment and line identities and impossible cancellation
     ]
   ) {
     await assert.rejects(
-      createCoupangClient(
+      createCoupangReadOrders(
         options({
           fetch: async () =>
             new Response(JSON.stringify({ ...original, data })),
         }),
-      ).readOrders(query),
+      ).execute(query),
       { code: "invalidResponse" },
     );
   }
 });
 test("coordination keys include provider namespace", async () => {
-  await createCoupangClient(
+  await createCoupangReadOrders(
     options({
       beforeRequest: async (scope) =>
         assert.deepEqual(scope.buckets, ["coupang:vendor:A00012345"]),
     }),
-  ).readOrders(query);
+  ).execute(query);
+});
+
+test("the shared public model validator rejects impossible calendar dates as safe response errors", async () => {
+  const body = fixture.replace(
+    "2026-10-18T10:01:12.123456+09:00",
+    "2026-02-31T10:01:12.123456+09:00",
+  );
+  await assert.rejects(
+    createCoupangReadOrders(options({ fetch: async () => new Response(body) }))
+      .execute(query),
+    (error) =>
+      error.code === "invalidResponse" && error.cause === undefined &&
+      !String(error.stack).includes("2026-02-31"),
+  );
 });

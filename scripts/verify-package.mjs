@@ -36,6 +36,8 @@ for (
     "dist/types.d.ts",
     "dist/coupang.js",
     "dist/naver.js",
+    "dist/testing.js",
+    "dist/testing.d.ts",
     "README.md",
   ]
 ) {
@@ -78,6 +80,10 @@ try {
     join(root, "examples/types-consumer.mts"),
     join(consumer, "types-consumer.mts"),
   );
+  await copyFile(
+    join(root, "examples/mock-orders.mjs"),
+    join(consumer, "mock-orders.mjs"),
+  );
   await cp(
     join(root, "kits/marketplace/tests/fixtures"),
     join(consumer, "fixtures"),
@@ -101,9 +107,12 @@ try {
     "types-consumer.mts",
   ], consumer);
   run(process.execPath, ["read-orders.mjs"], consumer);
+  run(process.execPath, ["mock-orders.mjs"], consumer);
   const deno = process.env.DENO_BIN ?? "deno";
   run(deno, ["check", "types-consumer.mts"], consumer);
   run(deno, ["run", "--allow-read", "read-orders.mjs"], consumer);
+  // Static module/JSON imports need no ambient filesystem or network grants.
+  run(deno, ["run", "--no-prompt", "mock-orders.mjs"], consumer);
   console.log(`Package consumer verification passed; SHA-256 ${hash}`);
 } finally {
   await rm(consumer, { recursive: true, force: true });
