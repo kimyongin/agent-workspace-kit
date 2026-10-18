@@ -1,0 +1,30 @@
+{
+  "code": 200,
+  "message": "OK",
+  "nextToken": "",
+  "data": [{
+    "shipmentBoxId": 90071992547409931,
+    "orderId": 90071992547409933,
+    "orderedAt": "2026-10-18T10:01:12.123456+09:00",
+    "status": "ACCEPT",
+    "orderItems": [{
+      "sequenceNo": "001",
+      "sellerProductId": 90071992547409935,
+      "vendorItemId": 90071992547409937,
+      "vendorItemName": "Synthetic item",
+      "shippingCount": 3,
+      "cancelCount": 1,
+      "holdCountForCancel": 1,
+      "salesPrice": {
+        "currencyCode": "KRW",
+        "units": 9007199254740993,
+        "nanos": 125000001
+      },
+      "orderPrice": {
+        "currencyCode": "KRW",
+        "units": 27021597764222979,
+        "nanos": 375000003
+      }
+    }]
+  }]
+}

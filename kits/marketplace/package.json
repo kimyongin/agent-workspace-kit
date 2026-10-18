@@ -1,0 +1,24 @@
+{
+  "name": "@kimyongin/marketplace-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed marketplace order readers with host-owned persistence and scheduling",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kimyongin/agent-workspace-kit.git",
+    "directory": "kits/marketplace"
+  },
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "files": ["dist", "README.md"],
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./types": { "types": "./dist/types.d.ts", "default": "./dist/types.js" },
+    "./coupang": {
+      "types": "./dist/coupang.d.ts",
+      "default": "./dist/coupang.js"
+    },
+    "./naver": { "types": "./dist/naver.d.ts", "default": "./dist/naver.js" }
+  },
+  "dependencies": { "bcryptjs": "3.0.3", "lossless-json": "4.3.2" }
+}

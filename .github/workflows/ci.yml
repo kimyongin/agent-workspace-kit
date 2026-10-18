@@ -1,0 +1,36 @@
+name: Marketplace kit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: '2.9.6'
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run check:docs
+      - run: npm run check:format
+      - run: npm test
+      - run: npm run verify:package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-package
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            .artifacts/*.tgz
+            .artifacts/*.sha256

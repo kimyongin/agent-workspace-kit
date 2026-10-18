@@ -1,0 +1,14 @@
+{
+  "traceId": "synthetic-contract-v1",
+  "data": {
+    "count": 1,
+    "lastChangeStatuses": [
+      {
+        "productOrderId": "90071992547409931234",
+        "orderId": "90071992547409935678",
+        "lastChangedDate": "2026-10-17T12:00:00+09:00",
+        "lastChangedType": "PAYED"
+      }
+    ]
+  }
+}

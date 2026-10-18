@@ -2,7 +2,7 @@
 
 공식 API 명세는 연동처가 소유한다. 이 저장소는 특정 시점에 확인한 계약과 킷의 구현·검증 범위를 관리한다. 비교 조사, 원본 명세, 내부 모델 매핑, 테스트용 응답 예제를 구분하고 각각의 출처와 버전을 연결한다.
 
-현재는 [조사 문서](../docs/research/coupang-naver-commerce-apis.md)와 [ESM 및 11번가 조사](../docs/research/gmarket-auction-11st-open-apis.md)를 이관한 단계다. 아래 연동처별 명세 디렉토리·원본 파일·fixture는 아직 작성하거나 수집하지 않았다. 생성 작업과 완료 기준은 [설계 이슈 #1](https://github.com/kimyongin/agent-workspace-kit/issues/1)에서 관리한다.
+현재 [쿠팡 주문 읽기 계약](coupang/orders.md)과 [네이버 주문 읽기 계약](naver/read-orders.md)을 구현·합성 fixture·테스트에 연결했다. 공식 원문 파일을 복제한 것이 아니라 공개 문서에서 확인한 최소 계약·매핑을 기록한 내부 구현 기준이다. 실제 계정 호출과 ESM·11번가·클레임·상품·정산 상세 계약은 아직 검증·구현하지 않았다. 비교 근거는 [쿠팡·네이버 조사](../docs/research/coupang-naver-commerce-apis.md)와 [ESM·11번가 조사](../docs/research/gmarket-auction-11st-open-apis.md)이며 후속 완료 기준은 [설계 이슈 #1](https://github.com/kimyongin/agent-workspace-kit/issues/1)에서 관리한다.
 
 ## 연동처별 관리 단위
 
