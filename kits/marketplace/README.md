@@ -32,6 +32,8 @@ await store.commit({ records: page.items, cursor: page.nextCursor });
 
 ## 조회 의미와 제약
 
+생성 함수는 마켓별 아웃바운드 어댑터를 주문 읽기 유스케이스에 연결한다. 앱은 인바운드 어댑터 없이 `readOrders()`를 직접 호출한다. 유스케이스는 한 페이지의 공통 결과를 완성하고, 마켓별 인증·조회 조건·커서·응답 변환은 어댑터가 담당한다. 내부 구조와 의존 규칙은 [SDK 헥사고날 설계](https://github.com/kimyongin/agent-workspace-kit/blob/main/docs/architecture.md)를 따른다. 실행 시점·저장·진행 상태·스캔 재시도 정책은 앱 책임이다.
+
 | 구현 | 지원 범위 |
 | --- | --- |
 | 쿠팡 | v5 발주서 분단위 전체 조회. 같은 KST 날짜의 24시간 미만 구간, `yyyy-MM-ddTHH:mm+09:00` 형식. 한 클라이언트에 조회 status 지정 |

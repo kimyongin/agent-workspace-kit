@@ -1,11 +1,9 @@
 import { parse } from "lossless-json";
-import { MarketplaceError } from "./errors.js";
-import type {
-  ClientDependencies,
-  Money,
-  ReadOrdersQuery,
-  RequestScope,
-} from "./types.js";
+import { MarketplaceError } from "../domain/errors.js";
+import { currentTime } from "../application/clock.js";
+import type { Money } from "../domain/orders.js";
+import type { ReadOrdersQuery } from "../application/contracts.js";
+import type { ClientDependencies, RequestScope } from "./options.js";
 
 export function object(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -62,21 +60,6 @@ export function validateDependencies(deps: ClientDependencies): void {
     throw new MarketplaceError(
       "configuration",
       "timeoutMs must be between 1 and 120000.",
-    );
-  }
-}
-
-export function currentTime(deps: ClientDependencies): Date {
-  try {
-    const value = deps.now?.() ?? new Date();
-    if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
-      throw new Error();
-    }
-    return new Date(value.getTime());
-  } catch {
-    throw new MarketplaceError(
-      "configuration",
-      "The clock did not provide a valid time.",
     );
   }
 }
@@ -229,7 +212,7 @@ export async function requestJson(
       : Number.isFinite(dateDelay)
       ? Math.max(
         0,
-        Math.ceil((dateDelay - currentTime(deps).getTime()) / 1000),
+        Math.ceil((dateDelay - currentTime(deps.now).getTime()) / 1000),
       )
       : undefined;
     try {

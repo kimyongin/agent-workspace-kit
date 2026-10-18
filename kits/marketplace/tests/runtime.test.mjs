@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFile } from "node:fs/promises";
 import { MarketplaceError } from "../dist/index.js";
 import { createCoupangClient } from "../dist/coupang.js";
 import { createNaverClient } from "../dist/naver.js";
@@ -172,3 +173,86 @@ test("an invalid or failing injected clock produces a safe configuration error",
     );
   }
 });
+
+for (const market of ["coupang", "naver"]) {
+  test(`${market} observes a page after the final provider response and masks a failing observation clock`, async () => {
+    const fixture = await readFile(
+      new URL(
+        `./fixtures/${
+          market === "coupang" ? "coupang-orders" : "naver-details"
+        }.json`,
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const changes = market === "naver"
+      ? await readFile(
+        new URL("./fixtures/naver-changes.json", import.meta.url),
+        "utf8",
+      )
+      : null;
+    for (const failClock of [false, true]) {
+      let finished = false;
+      const options = {
+        connectionId: "observed-page",
+        now: () => {
+          if (finished && failClock) {
+            throw new Error("observation-clock-secret-canary");
+          }
+          return new Date(
+            finished ? "2026-10-18T03:00:00Z" : "2026-10-18T01:00:00Z",
+          );
+        },
+        fetch: async (url) => {
+          if (url.endsWith("/oauth2/token")) {
+            return new Response(JSON.stringify({
+              access_token: "synthetic-token",
+              token_type: "Bearer",
+              expires_in: 3600,
+            }));
+          }
+          if (url.includes("last-changed-statuses")) {
+            return new Response(changes);
+          }
+          finished = true;
+          return new Response(fixture);
+        },
+      };
+      const reader = market === "coupang"
+        ? createCoupangClient({
+          ...options,
+          vendorId: "A00000001",
+          orderStatus: "ACCEPT",
+          credentials: async () => ({
+            accessKey: "synthetic",
+            secretKey: "synthetic",
+          }),
+        })
+        : createNaverClient({
+          ...options,
+          credentials: async () => ({
+            clientId: "synthetic",
+            clientSecret: "$2a$10$abcdefghijklmnopqrstuv",
+            type: "SELF",
+          }),
+        });
+      const result = reader.readOrders({
+        from: "2026-10-18T00:00+09:00",
+        to: "2026-10-18T01:00+09:00",
+      });
+      if (failClock) {
+        await assert.rejects(
+          result,
+          (error) =>
+            error instanceof MarketplaceError &&
+            error.code === "configuration" &&
+            !String(error.stack).includes("canary"),
+        );
+      } else {
+        const page = await result;
+        assert.equal(page.observedAt, "2026-10-18T03:00:00.000Z");
+        assert.ok(page.items.length > 0);
+      }
+    }
+  });
+}
