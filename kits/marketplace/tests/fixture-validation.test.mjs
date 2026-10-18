@@ -6,6 +6,61 @@ import fixture from "./fixtures/order-page.json" with { type: "json" };
 
 const request = { from: fixture.coverage.from, to: fixture.coverage.to };
 
+test("scenario configuration failures consistently expose the offending path", async () => {
+  const cases = [
+    [null, "mock"],
+    [{ market: "other", scenarios: [] }, "market"],
+    [{ market: "naver", scenarios: {} }, "scenarios"],
+    [{ market: "naver", scenarios: [null] }, "scenarios[0]"],
+    [{
+      market: "naver",
+      scenarios: [{ request: { ...request, cursor: 1 }, result: fixture }],
+    }, "scenarios[0].request.cursor"],
+    [
+      { market: "naver", scenarios: [{ result: fixture }] },
+      "scenarios[0].request",
+    ],
+    [{
+      market: "naver",
+      scenarios: [{ request, result: fixture }, { request, result: fixture }],
+    }, "scenarios[1].request"],
+    [{ market: "naver", scenarios: [{ request }] }, "scenarios[0]"],
+    [
+      { market: "naver", scenarios: [{ request, error: null }] },
+      "scenarios[0].error",
+    ],
+    [
+      { market: "naver", scenarios: [{ request, error: { code: "unknown" } }] },
+      "scenarios[0].error.code",
+    ],
+    [{
+      market: "naver",
+      scenarios: [{ request, error: { code: "transport", status: -1 } }],
+    }, "scenarios[0].error.status"],
+    [{
+      market: "naver",
+      scenarios: [{
+        request,
+        error: { code: "rateLimited", retryAfterSeconds: -1 },
+      }],
+    }, "scenarios[0].error.retryAfterSeconds"],
+  ];
+  for (const [options, path] of cases) {
+    assert.throws(
+      () => createMockReadOrders(options),
+      (error) =>
+        error instanceof MockFixtureError && error.path === path &&
+        error.code === "configuration",
+    );
+  }
+  await assert.rejects(
+    createMockReadOrders({ market: "naver", scenarios: [] }).execute(request),
+    (error) =>
+      error instanceof MockFixtureError && error.path === "request" &&
+      error.code === "configuration",
+  );
+});
+
 test("direct JSON injection reports value-free paths for malformed nested public data", () => {
   const changes = [
     [(p) => {
