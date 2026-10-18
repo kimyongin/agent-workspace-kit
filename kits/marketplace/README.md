@@ -54,7 +54,7 @@ npm run verify:package
 
 `npm test`와 `verify:package`는 이전 산출물을 지우고 현재 소스를 빌드한다. 검증은 패키지를 `.artifacts`에 포장하고 SHA-256을 기록한 뒤, 별도 임시 프로젝트에 tarball로 설치해 공개 exports·타입·실행을 Node 22와 Deno 2.9.6에서 확인한다. Deno가 PATH에 없으면 `DENO_BIN`으로 바이너리를 지정한다. 소비 예제는 실제 네트워크나 키 없이 정본 합성 fixture를 사용한다. SDK 소스나 템플릿 내부 경로를 직접 import하지 않는다.
 
-저장소와 패키지는 비공개이며 npm registry에 공개 배포하지 않는다. 소비자는 권한이 있는 GitHub CI artifact 또는 직접 빌드한 tarball과 해시를 받아 `npm install ./marketplace.tgz`로 설치할 수 있다. 설치된 의존성을 Deno에서 사용할 때는 `nodeModulesDir: "manual"`을 설정한다. 최초 설치에는 공개 런타임 의존성 다운로드가 필요하다. CI artifact의 접근 권한과 보관 수명은 호스트 운영 정책으로 관리한다.
+저장소는 공개이며 npm registry에는 아직 배포하지 않는다. 패키지의 `private: true`는 의도하지 않은 npm 배포를 방지하기 위해 유지한다. 소비자는 GitHub CI artifact 또는 직접 빌드한 tarball과 해시를 받아 `npm install ./marketplace.tgz`로 설치할 수 있다. 설치된 의존성을 Deno에서 사용할 때는 `nodeModulesDir: "manual"`을 설정한다. 최초 설치에는 공개 런타임 의존성 다운로드가 필요하다. CI artifact의 접근 권한과 보관 수명은 호스트 운영 정책으로 관리한다.
 
 ## 계약과 검증 근거
 
