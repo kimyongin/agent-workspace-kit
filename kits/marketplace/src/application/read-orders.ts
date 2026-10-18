@@ -1,4 +1,5 @@
 import { MarketplaceError } from "../domain/errors.js";
+import { assertOrderPage, OrderModelError } from "../domain/validation.js";
 import type { ReadOrdersUseCase } from "./contracts.js";
 import { currentTime } from "./clock.js";
 import type { Clock, OrderSource } from "./ports.js";
@@ -12,27 +13,27 @@ export function createReadOrdersUseCase(
     market: source.market,
     async execute(query) {
       const page = await source.readPage(query);
-      const identities = new Set<string>();
-      for (const order of page.items) {
-        const identity = JSON.stringify([order.ref.kind, order.ref.id]);
-        if (
-          identities.has(identity) ||
-          new Set(order.lines.map((line) => line.id)).size !==
-            order.lines.length
-        ) {
-          throw new MarketplaceError(
-            "invalidResponse",
-            "The provider response does not match the verified contract.",
-          );
-        }
-        identities.add(identity);
-      }
-      return {
+      const result = {
         items: page.items,
         nextCursor: page.nextCursor,
         observedAt: currentTime(now).toISOString(),
         coverage: page.coverage,
       };
+      try {
+        assertOrderPage(result, "result", {
+          market: source.market,
+          request: query,
+        });
+      } catch (error) {
+        if (error instanceof OrderModelError) {
+          throw new MarketplaceError(
+            "invalidResponse",
+            "The normalized order page does not match the public contract.",
+          );
+        }
+        throw error;
+      }
+      return result;
     },
   };
 }

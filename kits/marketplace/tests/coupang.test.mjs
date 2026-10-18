@@ -357,3 +357,17 @@ test("coordination keys include provider namespace", async () => {
     }),
   ).execute(query);
 });
+
+test("the shared public model validator rejects impossible calendar dates as safe response errors", async () => {
+  const body = fixture.replace(
+    "2026-10-18T10:01:12.123456+09:00",
+    "2026-02-31T10:01:12.123456+09:00",
+  );
+  await assert.rejects(
+    createCoupangReadOrders(options({ fetch: async () => new Response(body) }))
+      .execute(query),
+    (error) =>
+      error.code === "invalidResponse" && error.cause === undefined &&
+      !String(error.stack).includes("2026-02-31"),
+  );
+});

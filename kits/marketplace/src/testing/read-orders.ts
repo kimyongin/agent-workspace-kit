@@ -1,6 +1,8 @@
 import { MarketplaceError } from "../domain/errors.js";
 import type { MarketplaceErrorCode } from "../domain/errors.js";
-import type { Market, OrderPage, OrderSnapshot } from "../domain/orders.js";
+import type { Market, OrderPage } from "../domain/orders.js";
+import { assertOrderPage } from "../domain/validation.js";
+import { checkFixture, copyFixture } from "./validation.js";
 import type {
   ReadOrdersQuery,
   ReadOrdersUseCase,
@@ -60,18 +62,13 @@ function key(request: MockRequest): string {
 export function createMockReadOrders(
   options: MockReadOrdersOptions,
 ): ReadOrdersUseCase {
-  let snapshot: MockReadOrdersOptions;
-  try {
-    snapshot = structuredClone(options);
-  } catch {
-    configuration("Mock configuration must contain cloneable fixture data.");
-  }
+  const snapshot = copyFixture(options, "scenarios");
   if (
     !snapshot || !["coupang", "naver"].includes(snapshot.market) ||
     !Array.isArray(snapshot.scenarios)
   ) configuration("A mock market and scenarios are required.");
   const scenarios = new Map<string, MockReadOrdersScenario>();
-  for (const scenario of snapshot.scenarios) {
+  for (const [index, scenario] of snapshot.scenarios.entries()) {
     let requestKey: string;
     try {
       requestKey = key(scenario.request);
@@ -87,19 +84,12 @@ export function createMockReadOrders(
       configuration("A mock scenario requires exactly one result or error.");
     }
     if (scenario.result !== undefined) {
-      const page = scenario.result;
-      if (
-        !page || !Array.isArray(page.items) ||
-        typeof page.observedAt !== "string" || !page.coverage ||
-        !(page.nextCursor === null || typeof page.nextCursor === "string") ||
-        page.items.some((item: OrderSnapshot) =>
-          item?.ref?.market !== snapshot.market
-        )
-      ) {
-        configuration(
-          "A mock result must be an OrderPage for the selected market.",
-        );
-      }
+      checkFixture(() =>
+        assertOrderPage(scenario.result, `scenarios[${index}].result`, {
+          market: snapshot.market,
+          request: scenario.request,
+        })
+      );
     } else {
       const error = scenario.error;
       if (

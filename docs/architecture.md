@@ -36,7 +36,7 @@ domain과 application은 외부 패키지·어댑터·공개 조립 진입점을
 
 ```text
 src/
-├── domain/              주문 모델·공통 오류
+├── domain/              주문 모델·공통 모델 검증·오류
 ├── application/
 │   ├── read-orders.ts   공개 주문 조회 유스케이스 구현
 │   ├── contracts.ts     공개 유스케이스의 입력·인터페이스
@@ -49,15 +49,15 @@ src/
 │   └── options.ts       전송·자격증명 조립에 사용하는 공통 설정 타입
 ├── coupang.ts           createCoupangReadOrders 조립 진입점
 ├── naver.ts             createNaverReadOrders 조립 진입점
-├── testing/             공개 반환 모델을 재현하는 mock 유스케이스
-├── testing.ts           createMockReadOrders 공개 진입점
+├── testing/             mock 유스케이스·fixture 빌더·경로 오류 변환
+├── testing.ts           createMockReadOrders·createOrderFixtures 공개 진입점
 ├── types.ts             공개 타입 전용 진입점
 └── index.ts             공통 오류·타입 공개
 ```
 
 `createCoupangReadOrders`와 `createNaverReadOrders`는 내부 `OrderSource` 구현을 `createReadOrdersUseCase`에 주입하고 `ReadOrdersUseCase`를 반환한다. 앱은 `orders.execute(query)`를 호출한다. 별도 인바운드 어댑터는 없다. `createMockReadOrders`는 같은 입력 포트의 대체 구현을 반환하며 실제 유스케이스와 내부 `OrderSource`를 실행하지 않는다.
 
-유스케이스는 한 페이지를 읽고 공통 주문·항목 식별자의 중복을 검증한 뒤 관측 시각을 부여해 결과를 완성한다. `OrderSource`는 관측 시각을 제외한 정규화된 페이지를 반환한다. 시간 포트는 인증·관측 시각 모두에서 안전한 시간 검증을 거친다.
+유스케이스는 한 페이지를 읽고 관측 시각을 부여한 뒤 domain의 공통 모델 검증기로 중첩 필드·수량·금액·식별자·조회 범위 일관성을 확인한다. 잘못된 결과는 안전한 `invalidResponse`로 반환한다. `OrderSource`는 관측 시각을 제외한 정규화된 페이지를 반환한다. 시간 포트는 인증·관측 시각 모두에서 안전한 시간 검증을 거친다. 빌더와 직접 mock 주입도 같은 모델 검증기를 사용하며 구성 오류의 필드 경로를 제공한다.
 
 쿠팡의 상태별 KST 분단위 구간과 네이버의 변경 피드·상세 보충·계정별 커서는 어댑터에 둔다. 상세 보충까지 완료되어야 한 페이지가 성공한다. 마켓 차이를 지우기 위해 범용 `updatedSince`나 `execute(string, payload)` 계약을 만들지 않는다. 앱이 결과·커서를 저장하고 다음 호출을 결정한다.
 

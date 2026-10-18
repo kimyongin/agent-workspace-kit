@@ -69,11 +69,36 @@ const loadOrders = (orders: ReadOrdersUseCase) => orders.execute({ from, to });
 const page = await loadOrders(demo);
 ```
 
-`request`의 `from`·`to`·선택적 `cursor`를 문자열 그대로 매칭하고 `signal`은 매칭에서 제외한다. 다음 페이지는 해당 cursor의 시나리오로 설정한다. 반복·병렬 호출은 시나리오를 소비하지 않는다. 미등록 요청·중복 시나리오는 `configuration` 오류이며 빈 결과를 원하면 `items: []` 결과를 명시한다. 선택한 market과 주문 ref의 market은 일치해야 한다. 결과는 정적 `OrderPage` 타입과 기본 페이지 모양을 확인하며 제공자 제약 전체를 에뮬레이션하지 않는다.
+`request`의 `from`·`to`·선택적 `cursor`를 문자열 그대로 매칭하고 `signal`은 매칭에서 제외한다. 다음 페이지는 해당 cursor의 시나리오로 설정한다. 반복·병렬 호출은 시나리오를 소비하지 않는다. 미등록 요청·중복 시나리오는 `configuration` 오류이며 빈 결과를 원하면 `items: []` 결과를 명시한다. 선택한 market과 주문 ref·종류·조회 의미는 일치해야 하며 한 페이지는 한 연결의 주문을 담는다. 실제 결과와 같은 공통 검증기로 중첩 필드·식별자 중복·수량·정확한 금액 문자열·유효한 시각·커서·요청과 coverage 일치를 확인한다. 제공자 제약 전체를 에뮬레이션하지 않는다.
 
 실패 시나리오는 `result` 대신 `error: { code: "rateLimited", status: 429, retryAfterSeconds: 10 }`처럼 설정한다. 매번 새로운 `MarketplaceError`를 반환하며 외부 원문 메시지·cause를 붙이지 않는다. 생성 시 fixture와 호출별 반환값을 복사하고, `observedAt`·커서·정밀 금액도 그대로 유지한다. 사전 취소된 호출은 `cancelled`다. 네트워크·자격증명·DB·환경변수·타이머를 사용하지 않는다.
 
-mock은 공개 입력 포트를 대체하며 실제 유스케이스의 검증·인증·정규화를 실행하지 않는다. 실제 어댑터 테스트에는 기존 `fetch` 주입으로 제공자 원문 fixture를 전달한다. 공통 지침은 [공개 유스케이스와 mock 규약](https://github.com/kimyongin/agent-workspace-kit/blob/main/docs/mock-contract.md), 실행 예제는 [mock 소비 예제](https://github.com/kimyongin/agent-workspace-kit/blob/main/examples/mock-orders.mjs)와 [실제/mock 교체 예제](https://github.com/kimyongin/agent-workspace-kit/blob/main/examples/read-orders.mjs)를 참고한다.
+mock은 공개 입력 포트를 대체하며 실제 유스케이스·마켓 인증·정규화를 실행하지 않는다. 공개 모델 검증은 domain의 공통 검증기를 직접 재사용한다. 실제 어댑터 테스트에는 기존 `fetch` 주입으로 제공자 원문 fixture를 전달한다. 공통 지침은 [공개 유스케이스와 mock 규약](https://github.com/kimyongin/agent-workspace-kit/blob/main/docs/mock-contract.md), 실행 예제는 [mock 소비 예제](https://github.com/kimyongin/agent-workspace-kit/blob/main/examples/mock-orders.mjs)와 [실제/mock 교체 예제](https://github.com/kimyongin/agent-workspace-kit/blob/main/examples/read-orders.mjs)를 참고한다.
+
+## Fixture 빌더
+
+필요한 값만 지정해 공개 `OrderLine`·`OrderSnapshot`·`OrderPage`를 만든다. 결과를 변환하지 않고 mock의 `result`에 그대로 넣는다.
+
+```ts
+import { createOrderFixtures, createMockReadOrders } from "@kimyongin/marketplace-kit/testing";
+
+const fixtures = createOrderFixtures({ market: "naver", connectionId: "demo-store", from, to });
+const page = fixtures.page({
+  items: [fixtures.order({
+    lines: [fixtures.line({ title: "테스트 상품", quantity: 2 })],
+  })],
+});
+const orders = createMockReadOrders({
+  market: "naver",
+  scenarios: [{ request: { from, to }, result: page }],
+});
+```
+
+`line()`의 기본 수량은 1, 상품명은 합성 문자열, 단가는 KRW `"1000"`이며 결제금액은 추정하지 않고 생략한다. `order()`는 기본 항목 하나와 마켓에 맞는 ref 종류·초기 상태를 제공한다. `page()`는 기본 주문 하나, 다음 커서 null을 제공한다. 빈 페이지는 `page({ items: [] })`로 만든다. ref와 coverage는 부분 override가 가능하고 그 밖의 중첩 모델은 완전한 공개 타입을 전달한다.
+
+주문 시각은 `from`, 관측 시각은 `observedAt` 옵션 또는 `to`다. 현재 시각·난수를 사용하지 않는다. 같은 설정과 같은 빌더 호출 순서는 같은 데이터를 만든다. 자동 ID는 해당 인스턴스에 먼저 제공된 ID를 피해 생성한다. 명시 ID의 중복은 주문/페이지를 구성할 때 오류로 알리며 서로 다른 페이지에서 같은 주문을 재현하는 것은 가능하다. 입력과 반환 모델은 서로 복사되어 영향을 주지 않는다. 금액은 정확한 10진 문자열을 직접 지정하고 단가×수량으로 자동 정산하지 않는다.
+
+빌더와 직접 JSON 주입은 같은 공통 모델 검증기를 사용한다. 잘못된 fixture는 `MockFixtureError`(`MarketplaceError`의 하위 타입, code는 `configuration`)로 실패하고 `path`가 문제 위치를 가리킨다. 예를 들어 `line.quantity`, `page.items[1].ref.id`, `scenarios[1].result.items[0].lines[2].unitPrice.amount`다. 메시지에는 잘못된 값이나 원본 exception을 넣지 않는다. 실제 조회에서 잘못된 정규화 결과는 안전한 `invalidResponse`다.
 
 ## 0.2.0 전환
 
@@ -87,6 +112,8 @@ mock은 공개 입력 포트를 대체하며 실제 유스케이스의 검증·�
 | `reader.readOrders(query)` | `orders.execute(query)` |
 
 `/testing`의 `createMockReadOrders`는 신규 진입점이며 내부 포트는 계속 비공개다.
+
+0.2.0의 mock/빌더는 중첩 공개 모델을 실행 시에도 검증한다. 이전의 느슨한 fixture에서 누락·잘못된 수량/금액/시간·중복 ID·연결/coverage 불일치가 있으면 `MockFixtureError.path`를 참고해 수정한다. 유효한 공개 결과와 실제 마켓 커서 형식은 바뀌지 않는다.
 
 ## 패키지 소비와 검증
 
